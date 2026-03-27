@@ -1,14 +1,19 @@
-"""Gripper server configuration constants."""
+"""Gripper server configuration constants — delegates to gripper_protocol."""
 
-GRIPPER_CMD_PORT = 5570
-GRIPPER_STATE_PORT = 5571
+from gripper_protocol.protocol import (
+    DEFAULT_CMD_PORT as GRIPPER_CMD_PORT,
+    DEFAULT_STATE_PORT as GRIPPER_STATE_PORT,
+    MessageType,
+)
+
 STATE_HZ = 10
 
-MSG_ACTIVATE = 10
-MSG_RESET = 11
-MSG_MOVE = 12
-MSG_OPEN = 13
-MSG_CLOSE = 14
-MSG_STOP = 15
-MSG_CALIBRATE = 16
-MSG_RESPONSE = 100
+# Backward-compatible aliases used by bridge server.py
+MSG_ACTIVATE = MessageType.ACTIVATE
+MSG_RESET = MessageType.RESET
+MSG_MOVE = MessageType.MOVE
+MSG_OPEN = MessageType.OPEN
+MSG_CLOSE = MessageType.CLOSE
+MSG_STOP = MessageType.STOP
+MSG_CALIBRATE = MessageType.CALIBRATE
+MSG_RESPONSE = MessageType.RESPONSE
