@@ -85,6 +85,26 @@ class GripperBridge:
         sock.close()
         ctx.term()
 
+    def _wait_gripper_settled(self, timeout=3.0, tol_mm=0.5, settle_reads=3):
+        """Poll sim state until gripper position stabilizes or timeout."""
+        # Initial delay so the sim has time to start applying the action
+        time.sleep(0.15)
+        prev_mm = None
+        stable_count = 0
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            time.sleep(0.05)
+            state = self._server.get_state()
+            mm = state.gripper_position_mm
+            if prev_mm is not None and abs(mm - prev_mm) < tol_mm:
+                stable_count += 1
+                if stable_count >= settle_reads:
+                    return state
+            else:
+                stable_count = 0
+            prev_mm = mm
+        return self._server.get_state()
+
     def _dispatch_rpc(self, req):
         msg_type = req.get("msg_type")
 
@@ -95,19 +115,19 @@ class GripperBridge:
             return _ok({"result": True})
         elif msg_type == MSG_OPEN:
             self._server.set_gripper_action(GRIPPER_OPEN_VAL)
-            state = self._server.get_state()
+            state = self._wait_gripper_settled()
             return _ok({"position": self._mm_to_robotiq(state.gripper_position_mm),
                          "object_detected": False})
         elif msg_type == MSG_CLOSE:
             self._server.set_gripper_action(GRIPPER_CLOSED_VAL)
-            state = self._server.get_state()
+            state = self._wait_gripper_settled()
             return _ok({"position": self._mm_to_robotiq(state.gripper_position_mm),
                          "object_detected": state.gripper_object_detected})
         elif msg_type == MSG_MOVE:
             position = req.get("position", 0)
             val = GRIPPER_CLOSED_VAL if position >= 128 else GRIPPER_OPEN_VAL
             self._server.set_gripper_action(val)
-            state = self._server.get_state()
+            state = self._wait_gripper_settled()
             return _ok({"position": self._mm_to_robotiq(state.gripper_position_mm),
                          "object_detected": state.gripper_object_detected})
         elif msg_type in (MSG_STOP, MSG_RESET, MSG_CALIBRATE):
