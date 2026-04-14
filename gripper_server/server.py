@@ -24,8 +24,10 @@ GRIPPER_CLOSED_VAL = 0.81
 class GripperBridge:
     """Protocol bridge: ZMQ REP + PUB for Robotiq-style gripper control."""
 
-    def __init__(self, server, cmd_port=GRIPPER_CMD_PORT, state_port=GRIPPER_STATE_PORT):
+    def __init__(self, server, cmd_port=GRIPPER_CMD_PORT, state_port=GRIPPER_STATE_PORT,
+                 env_idx=0):
         self._server = server
+        self._env_idx = env_idx
         self._cmd_port = cmd_port
         self._state_port = state_port
         self._running = False
@@ -56,7 +58,7 @@ class GripperBridge:
 
         interval = 1.0 / STATE_HZ
         while self._running:
-            state = self._server.get_state()
+            state = self._server.get_state(env_idx=self._env_idx)
             msg = self._build_state_dict(state)
             sock.send(msgpack.packb(msg, use_bin_type=True))
             time.sleep(interval)
@@ -94,7 +96,7 @@ class GripperBridge:
         deadline = time.time() + timeout
         while time.time() < deadline:
             time.sleep(0.05)
-            state = self._server.get_state()
+            state = self._server.get_state(env_idx=self._env_idx)
             mm = state.gripper_position_mm
             if prev_mm is not None and abs(mm - prev_mm) < tol_mm:
                 stable_count += 1
@@ -103,7 +105,7 @@ class GripperBridge:
             else:
                 stable_count = 0
             prev_mm = mm
-        return self._server.get_state()
+        return self._server.get_state(env_idx=self._env_idx)
 
     def _dispatch_rpc(self, req):
         msg_type = req.get("msg_type")
@@ -114,19 +116,19 @@ class GripperBridge:
         if msg_type == MSG_ACTIVATE:
             return _ok({"result": True})
         elif msg_type == MSG_OPEN:
-            self._server.set_gripper_action(GRIPPER_OPEN_VAL)
+            self._server.set_gripper_action(env_idx=self._env_idx, value=GRIPPER_OPEN_VAL)
             state = self._wait_gripper_settled()
             return _ok({"position": self._mm_to_robotiq(state.gripper_position_mm),
                          "object_detected": False})
         elif msg_type == MSG_CLOSE:
-            self._server.set_gripper_action(GRIPPER_CLOSED_VAL)
+            self._server.set_gripper_action(env_idx=self._env_idx, value=GRIPPER_CLOSED_VAL)
             state = self._wait_gripper_settled()
             return _ok({"position": self._mm_to_robotiq(state.gripper_position_mm),
                          "object_detected": state.gripper_object_detected})
         elif msg_type == MSG_MOVE:
             position = req.get("position", 0)
             val = GRIPPER_CLOSED_VAL if position >= 128 else GRIPPER_OPEN_VAL
-            self._server.set_gripper_action(val)
+            self._server.set_gripper_action(env_idx=self._env_idx, value=val)
             state = self._wait_gripper_settled()
             return _ok({"position": self._mm_to_robotiq(state.gripper_position_mm),
                          "object_detected": state.gripper_object_detected})
